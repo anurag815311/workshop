@@ -1,5 +1,6 @@
 
 import streamlit as st
+import pandas as pd
 from sentence_transformers import SentenceTransformer
 from google import genai
 
@@ -116,7 +117,7 @@ def retrieve_documents(question):
         for index in ranked_indices
     ]
 
-    return retrieved_documents, scores
+    return retrieved_documents, scores, ranked_indices
 
 
 # -------------------------------
@@ -205,7 +206,7 @@ if ask_button:
             with st.spinner(
                 "Searching documents and generating your answer..."
             ):
-                retrieved_documents, similarity_scores = (
+                retrieved_documents, similarity_scores, _ = (
                     retrieve_documents(question.strip())
                 )
 
@@ -218,9 +219,7 @@ if ask_button:
             st.subheader("Answer")
             st.markdown(answer)
 
-            with st.expander(
-                "View Retrieved Documents"
-            ):
+            with st.expander("View Retrieved Documents"):
                 st.caption(
                     "These are the two documents selected "
                     "for answering your question."
@@ -254,7 +253,136 @@ if ask_button:
 
 
 # -------------------------------
-# 10. FOOTER
+# 10. RAG TEST SUITE
+# -------------------------------
+
+st.divider()
+
+st.subheader("🧪 RAG Test Suite")
+
+st.write(
+    "Run five predefined questions to check whether "
+    "the application retrieves the expected documents."
+)
+
+test_cases = [
+    {
+        "question": "What are the ACID properties in DBMS?",
+        "expected_index": 0,
+        "topic": "DBMS - ACID Properties"
+    },
+    {
+        "question": "What is a vector database and how does it support semantic search?",
+        "expected_index": 1,
+        "topic": "DBMS - Vector Database"
+    },
+    {
+        "question": "Why is cache memory used in computer architecture?",
+        "expected_index": 2,
+        "topic": "COA - Cache Memory"
+    },
+    {
+        "question": "What does Amdahl's law explain?",
+        "expected_index": 3,
+        "topic": "COA - Amdahl's Law"
+    },
+    {
+        "question": "What should students carry while on campus?",
+        "expected_index": 4,
+        "topic": "Campus Policy - ID Card"
+    }
+]
+
+if st.button(
+    "▶ Run All 5 Tests",
+    use_container_width=True
+):
+
+    test_results = []
+
+    with st.spinner("Running retrieval tests..."):
+
+        for test in test_cases:
+
+            try:
+                retrieved_docs, scores, indices = (
+                    retrieve_documents(test["question"])
+                )
+
+                passed = test["expected_index"] in indices
+
+                test_results.append({
+                    "Test": test["topic"],
+                    "Question": test["question"],
+                    "Status": "PASS" if passed else "FAIL",
+                    "Top Similarity": round(scores[0], 3),
+                    "Expected Document Retrieved": (
+                        "Yes" if passed else "No"
+                    )
+                })
+
+            except Exception as error:
+
+                test_results.append({
+                    "Test": test["topic"],
+                    "Question": test["question"],
+                    "Status": "FAIL",
+                    "Top Similarity": 0,
+                    "Expected Document Retrieved": "Error"
+                })
+
+                st.error(
+                    f"Error in {test['topic']}: {error}"
+                )
+
+    # Save results in session state
+    st.session_state["test_results"] = test_results
+
+
+# -------------------------------
+# 11. DISPLAY TEST REPORT
+# -------------------------------
+
+if "test_results" in st.session_state:
+
+    results = st.session_state["test_results"]
+
+    passed_count = sum(
+        1 for result in results
+        if result["Status"] == "PASS"
+    )
+
+    failed_count = len(results) - passed_count
+
+    st.subheader("📊 Test Report")
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Total Tests", len(results))
+    col2.metric("Passed", passed_count)
+    col3.metric("Failed", failed_count)
+
+    st.progress(passed_count / len(results))
+
+    st.dataframe(
+        pd.DataFrame(results),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    if failed_count == 0:
+        st.success(
+            "All 5 tests passed! Retrieval is working as expected."
+        )
+    else:
+        st.warning(
+            f"{failed_count} test(s) failed. "
+            "Review the retrieved documents and improve the knowledge base."
+        )
+
+
+# -------------------------------
+# 12. FOOTER
 # -------------------------------
 
 st.divider()
